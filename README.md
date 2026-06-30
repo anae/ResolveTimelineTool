@@ -2,6 +2,10 @@
 
 Petit outil local pour preparer une timeline EDL/FCPXML importable dans DaVinci Resolve.
 
+## Apercu
+
+![Apercu de l'interface Resolve Timeline Tool](docs/resolve-timeline-tool.png)
+
 ## Lancer
 
 ```bash
