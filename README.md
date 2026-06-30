@@ -2,6 +2,12 @@
 
 Petit outil local pour preparer une timeline EDL/FCPXML importable dans DaVinci Resolve.
 
+Situation:
+Vous rentrez de voyage avec des heures de rush vidéo (action camera, drone etc).
+Il faut maintenant faire les cuts et préparer une vidéos qui met en avant les meilleurs moment du trip.
+La motivation n'est pas à son comble devant les heures de travail que celà représente.
+Resolve Timeline Tool vient résoudre le problème en préparant une timeline déjà pré-découpée et prête pour votre final touch.
+
 ## Apercu
 
 ![Apercu de l'interface Resolve Timeline Tool](docs/resolve-timeline-tool.png)
