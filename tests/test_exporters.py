@@ -21,6 +21,7 @@ class ExporterTests(unittest.TestCase):
                 created_at=created_at,
                 day=created_at.date(),
                 is_drone=False,
+                start_timecode_seconds=3600.12,
             )
             plan = TimelinePlan(
                 name="Mountain test",
@@ -47,13 +48,17 @@ class ExporterTests(unittest.TestCase):
             root = ET.parse(output_path).getroot()
             asset = root.find("./resources/asset")
             media_rep = root.find("./resources/asset/media-rep")
+            asset_clip = root.find("./library/event/project/sequence/spine/asset-clip")
 
         self.assertIsNotNone(asset)
         self.assertNotIn("src", asset.attrib)
         self.assertEqual(asset.attrib["format"], "r0")
+        self.assertEqual(asset.attrib["start"], "90003/25s")
         self.assertIsNotNone(media_rep)
         self.assertEqual(media_rep.attrib["kind"], "original-media")
         self.assertEqual(media_rep.attrib["src"], clip_path.resolve().as_uri())
+        self.assertIsNotNone(asset_clip)
+        self.assertEqual(asset_clip.attrib["start"], "90003/25s")
 
     def test_timecode_at_25fps(self) -> None:
         self.assertEqual(seconds_to_timecode(0, 25), "00:00:00:00")

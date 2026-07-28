@@ -48,6 +48,7 @@ def probe_clip(path: Path, style: StyleConfig) -> ClipInfo:
     duration = _duration_from_probe(data) if data else None
     created_at = _created_at_from_probe(data) if data else None
     fps = _fps_from_probe(data) if data else None
+    start_timecode_seconds = _start_timecode_from_probe(data, fps or style.fps)
     has_audio = _has_audio(data) if data else True
 
     warning = probe_warning
@@ -67,6 +68,7 @@ def probe_clip(path: Path, style: StyleConfig) -> ClipInfo:
         created_at=created_at,
         day=created_at.date(),
         is_drone=_is_drone_clip(path, style.drone_keywords),
+        start_timecode_seconds=start_timecode_seconds,
         fps=fps,
         has_audio=has_audio,
         warning=warning,
@@ -85,7 +87,11 @@ def _run_ffprobe(path: Path) -> Tuple[Optional[dict], Optional[str]]:
         "-print_format",
         "json",
         "-show_entries",
-        "format=duration:format_tags=creation_time:stream=codec_type,duration,r_frame_rate:stream_tags=creation_time",
+        (
+            "format=duration:format_tags=creation_time,timecode:"
+            "stream=codec_type,duration,r_frame_rate:"
+            "stream_tags=creation_time,timecode"
+        ),
         str(path),
     ]
     try:
@@ -173,6 +179,48 @@ def _fps_from_probe(data: Optional[dict]) -> Optional[float]:
         except ValueError:
             continue
     return None
+
+
+def _start_timecode_from_probe(data: Optional[dict], fps: float) -> float:
+    if not data:
+        return 0.0
+
+    candidates = [((data.get("format") or {}).get("tags") or {}).get("timecode")]
+    for stream in data.get("streams") or []:
+        candidates.append(((stream.get("tags") or {}).get("timecode")))
+
+    for raw in candidates:
+        seconds = _parse_timecode(raw, fps)
+        if seconds is not None:
+            return seconds
+    return 0.0
+
+
+def _parse_timecode(value: Optional[str], fps: float) -> Optional[float]:
+    if not value:
+        return None
+
+    match = re.fullmatch(r"(\d{1,2}):([0-5]\d):([0-5]\d)([:;])(\d{1,2})", value.strip())
+    if not match:
+        return None
+
+    hours, minutes, seconds, separator, frames = match.groups()
+    nominal_fps = max(1, int(round(fps)))
+    frame_number = int(frames)
+    if frame_number >= nominal_fps:
+        return None
+
+    total_minutes = int(hours) * 60 + int(minutes)
+    total_frames = (
+        ((int(hours) * 3600) + (int(minutes) * 60) + int(seconds)) * nominal_fps
+        + frame_number
+    )
+
+    if separator == ";" and nominal_fps in (30, 60):
+        drop_frames = 2 if nominal_fps == 30 else 4
+        total_frames -= drop_frames * (total_minutes - (total_minutes // 10))
+
+    return total_frames / nominal_fps
 
 
 def _has_audio(data: Optional[dict]) -> bool:

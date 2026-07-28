@@ -42,8 +42,9 @@ def export_edl(plan: TimelinePlan, output_path: Path) -> None:
             current_day = segment.day
             lines.append(f"* DAY: {current_day.isoformat()}")
 
-        source_in = seconds_to_timecode(segment.source_in, plan.fps)
-        source_out = seconds_to_timecode(segment.source_out, plan.fps)
+        source_start = segment.clip.start_timecode_seconds
+        source_in = seconds_to_timecode(source_start + segment.source_in, plan.fps)
+        source_out = seconds_to_timecode(source_start + segment.source_out, plan.fps)
         record_in = seconds_to_timecode(segment.record_in, plan.fps)
         record_out = seconds_to_timecode(segment.record_out, plan.fps)
         reel = _edl_reel(segment.clip.path)
@@ -78,9 +79,11 @@ def export_fcpxml(plan: TimelinePlan, output_path: Path) -> None:
 
     asset_ids = _asset_ids(plan.segments)
     for path, asset_id in asset_ids.items():
-        longest_duration = max(
-            segment.clip.duration_seconds for segment in plan.segments if segment.clip.path == path
-        )
+        matching_clips = [
+            segment.clip for segment in plan.segments if segment.clip.path == path
+        ]
+        longest_duration = max(clip.duration_seconds for clip in matching_clips)
+        start_timecode_seconds = matching_clips[0].start_timecode_seconds
         asset = ET.SubElement(
             resources,
             "asset",
@@ -88,7 +91,7 @@ def export_fcpxml(plan: TimelinePlan, output_path: Path) -> None:
                 "id": asset_id,
                 "name": path.name,
                 "format": "r0",
-                "start": "0s",
+                "start": fcpx_time(start_timecode_seconds, plan.fps),
                 "duration": fcpx_time(longest_duration, plan.fps),
                 "hasVideo": "1",
                 "hasAudio": "1",
@@ -126,7 +129,10 @@ def export_fcpxml(plan: TimelinePlan, output_path: Path) -> None:
             "name": segment.clip.name,
             "ref": asset_ids[segment.clip.path],
             "offset": fcpx_time(segment.record_in, plan.fps),
-            "start": fcpx_time(segment.source_in, plan.fps),
+            "start": fcpx_time(
+                segment.clip.start_timecode_seconds + segment.source_in,
+                plan.fps,
+            ),
             "duration": fcpx_time(segment.duration_seconds, plan.fps),
         }
         asset_clip = ET.SubElement(spine, "asset-clip", attrs)

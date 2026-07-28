@@ -30,6 +30,7 @@ class ClipInfo:
     created_at: datetime
     day: date
     is_drone: bool
+    start_timecode_seconds: float = 0.0
     fps: Optional[float] = None
     has_audio: bool = True
     warning: Optional[str] = None
