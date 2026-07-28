@@ -31,9 +31,14 @@ La commande explicite reste disponible :
 
 1. Choisir le dossier source contenant les rushs.
 2. Choisir le fichier `.md` qui decrit le style.
-3. Regler la duree maximale des segments.
-4. Cliquer sur `Generer timeline`.
-5. Modifier le `.md` si besoin, puis cliquer sur `Relancer apres modification .md`.
+3. Regler la duree maximale d'un segment.
+4. Regler la duree cible de la timeline en minutes.
+5. Cliquer sur `Generer timeline`.
+6. Modifier le `.md` si besoin, puis cliquer sur `Relancer apres modification .md`.
+
+La duree maximale limite chaque plan, mais ne fixe pas la longueur du montage.
+La duree cible selectionne des extraits chronologiques repartis entre les
+journees pour produire une timeline de la longueur demandee.
 
 Le traitement cree trois fichiers dans `_resolve_timeline_exports` ou le dossier choisi :
 

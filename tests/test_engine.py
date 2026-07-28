@@ -70,6 +70,33 @@ class EngineTests(unittest.TestCase):
         self.assertEqual([segment.role for segment in plan.segments], ["main", "drone_transition", "main"])
         self.assertEqual(plan.segments[0].marker, "Jour 2026-06-18")
 
+    def test_target_duration_selects_balanced_highlights(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            day_one = datetime(2026, 6, 18, 10, 0, 0)
+            day_two = datetime(2026, 6, 19, 10, 0, 0)
+            clips = [
+                ClipInfo(tmp_path / "day1_a.mp4", 20.0, day_one, day_one.date(), False),
+                ClipInfo(tmp_path / "day1_b.mp4", 20.0, day_one, day_one.date(), False),
+                ClipInfo(tmp_path / "day2_a.mp4", 20.0, day_two, day_two.date(), False),
+                ClipInfo(tmp_path / "day2_b.mp4", 20.0, day_two, day_two.date(), False),
+            ]
+
+            plan = build_timeline_plan(
+                source_dir=tmp_path,
+                style_path=tmp_path / "style.md",
+                output_dir=tmp_path / "out",
+                clips=clips,
+                style=StyleConfig(beat_sync_enabled=False, min_segment_seconds=2.0),
+                fps=25,
+                max_segment_seconds=8.0,
+                target_duration_seconds=30.0,
+            )
+
+        self.assertAlmostEqual(plan.duration_seconds, 30.0)
+        self.assertEqual({segment.day for segment in plan.segments}, {day_one.date(), day_two.date()})
+        self.assertTrue(all(segment.duration_seconds <= 8.0 for segment in plan.segments))
+
 
 if __name__ == "__main__":
     unittest.main()

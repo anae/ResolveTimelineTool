@@ -65,6 +65,7 @@ class TimelinePlan:
     source_dir: Path
     style_path: Path
     output_dir: Path
+    target_duration_seconds: Optional[float] = None
 
     @property
     def duration_seconds(self) -> float:

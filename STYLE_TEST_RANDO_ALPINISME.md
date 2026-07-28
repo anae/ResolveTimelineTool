@@ -45,6 +45,8 @@ montes et les medias de cache.
 Dans `Duree max segment`, saisir `8` secondes. Cela donnera principalement des
 segments de 5 a 8 secondes, avec certains cuts ajustes sur un beat proche.
 
+Dans `Duree cible timeline`, saisir `5` minutes pour le premier montage.
+
 Pour un montage plus dynamique, relancer avec `5` ou `6` secondes.
 Pour un montage plus contemplatif, relancer avec `10` secondes.
 
@@ -57,9 +59,10 @@ Pour un montage plus contemplatif, relancer avec `10` secondes.
 5. Choisir le dossier de rushs.
 6. Choisir ce fichier `STYLE_TEST_RANDO_ALPINISME.md`.
 7. Regler la duree maximale sur `8` secondes.
-8. Cliquer sur `Generer timeline`.
-9. Importer en priorite le fichier `.fcpxml` genere dans DaVinci Resolve.
-10. Consulter le fichier `_report.md` si un rush est ignore ou mal analyse.
+8. Regler la duree cible sur `5` minutes.
+9. Cliquer sur `Generer timeline`.
+10. Importer en priorite le fichier `.fcpxml` genere dans DaVinci Resolve.
+11. Consulter le fichier `_report.md` si un rush est ignore ou mal analyse.
 
 Les fichiers de sortie sont crees par defaut dans le sous-dossier
 `_resolve_timeline_exports` du dossier contenant les rushs.

@@ -170,10 +170,12 @@ def write_report(plan: TimelinePlan, output_path: Path) -> None:
         f"- FPS: `{plan.fps}`",
         f"- Segments: `{len(plan.segments)}`",
         f"- Duree timeline: `{seconds_to_timecode(plan.duration_seconds, plan.fps)}`",
-        "",
-        "## Decoupage par jour",
-        "",
     ]
+    if plan.target_duration_seconds is not None:
+        lines.append(
+            f"- Duree cible: `{seconds_to_timecode(plan.target_duration_seconds, plan.fps)}`"
+        )
+    lines.extend(["", "## Decoupage par jour", ""])
     for day, count in sorted(day_counts.items()):
         lines.append(f"- {day}: {count} segment(s)")
     lines.extend(["", "## Roles", ""])

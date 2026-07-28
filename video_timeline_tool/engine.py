@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+from math import ceil
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -18,6 +19,7 @@ def process_timeline(
     max_segment_seconds: float,
     output_dir: Optional[Path] = None,
     progress: Optional[ProgressCallback] = None,
+    target_duration_seconds: Optional[float] = None,
 ) -> ExportResult:
     source_dir = source_dir.expanduser().resolve()
     style_path = style_path.expanduser().resolve()
@@ -28,6 +30,8 @@ def process_timeline(
     _progress(progress, 0.02, "Lecture du style Markdown")
     style = read_style(style_path)
     max_segment_seconds = max(style.min_segment_seconds, float(max_segment_seconds))
+    if target_duration_seconds is not None:
+        target_duration_seconds = max(style.min_segment_seconds, float(target_duration_seconds))
 
     _progress(progress, 0.08, "Recherche des rushs video")
     video_files = find_video_files(source_dir, style.skip_keywords)
@@ -57,6 +61,7 @@ def process_timeline(
         style=style,
         fps=fps,
         max_segment_seconds=max_segment_seconds,
+        target_duration_seconds=target_duration_seconds,
         warnings=warnings,
         progress=progress,
     )
@@ -88,6 +93,7 @@ def build_timeline_plan(
     max_segment_seconds: float,
     warnings: Optional[List[str]] = None,
     progress: Optional[ProgressCallback] = None,
+    target_duration_seconds: Optional[float] = None,
 ) -> TimelinePlan:
     warnings = list(warnings or [])
     main_clips = [clip for clip in clips if not clip.is_drone]
@@ -99,18 +105,69 @@ def build_timeline_plan(
         warnings.append("Aucun rush principal detecte: tous les clips sont utilises en principal")
 
     grouped = _group_by_day(main_clips)
-    drone_index = 0
-    record_cursor = 0.0
-    segments: List[TimelineSegment] = []
     beat_cache: Dict[Path, List[float]] = {}
+    candidates_by_day: Dict[object, List[tuple[ClipInfo, float, float]]] = defaultdict(list)
 
     total_main = max(1, len(main_clips))
     processed = 0
     for day in sorted(grouped):
         day_clips = sorted(grouped[day], key=lambda clip: (clip.created_at, clip.name.lower()))
+        for clip in day_clips:
+            beats = []
+            if style.beat_sync_enabled and clip.has_audio:
+                if clip.path not in beat_cache:
+                    _progress(progress, 0.50 + 0.30 * processed / total_main, f"Detection beats: {clip.name}")
+                    beat_cache[clip.path] = detect_beats(clip.path, clip.duration_seconds)
+                beats = beat_cache[clip.path]
+
+            for source_in, source_out in _segment_ranges(
+                clip.duration_seconds,
+                max_segment_seconds,
+                style.min_segment_seconds,
+                beats,
+                style.beat_snap_window_seconds,
+            ):
+                candidates_by_day[day].append((clip, source_in, source_out))
+
+            processed += 1
+            _progress(
+                progress,
+                0.50 + 0.30 * processed / total_main,
+                f"Timeline: {processed}/{total_main} clips principaux",
+            )
+
+    if style.beat_sync_enabled and not any(beat_cache.values()):
+        warnings.append("Aucun beat detecte: cuts places sur la duree maximale des segments")
+
+    selected_by_day = candidates_by_day
+    if target_duration_seconds is not None:
+        selected_by_day = _select_for_target(
+            candidates_by_day,
+            target_duration_seconds,
+            max_segment_seconds,
+            style.min_segment_seconds,
+            drone_clips,
+            style.transition_seconds,
+        )
+
+    record_cursor = 0.0
+    drone_index = 0
+    segments: List[TimelineSegment] = []
+    previous_clip_path: Optional[Path] = None
+    selected_days = [day for day in sorted(selected_by_day) if selected_by_day[day]]
+    for day_index, day in enumerate(selected_days):
         first_for_day = True
-        for clip_index, clip in enumerate(day_clips):
-            if drone_clips and segments:
+        for clip, source_in, source_out in selected_by_day[day]:
+            starts_new_clip = previous_clip_path is not None and clip.path != previous_clip_path
+            needs_drone = (
+                drone_clips
+                and segments
+                and (
+                    (target_duration_seconds is None and starts_new_clip)
+                    or (target_duration_seconds is not None and day_index > 0 and first_for_day)
+                )
+            )
+            if needs_drone:
                 drone_clip = drone_clips[drone_index % len(drone_clips)]
                 drone_index += 1
                 drone_duration = min(style.transition_seconds, drone_clip.duration_seconds)
@@ -128,46 +185,28 @@ def build_timeline_plan(
                     )
                     record_cursor += drone_duration
 
-            beats = []
-            if style.beat_sync_enabled and clip.has_audio:
-                if clip.path not in beat_cache:
-                    _progress(progress, 0.50 + 0.30 * processed / total_main, f"Detection beats: {clip.name}")
-                    beat_cache[clip.path] = detect_beats(clip.path, clip.duration_seconds)
-                beats = beat_cache[clip.path]
-
-            marker = f"Jour {day.isoformat()}" if first_for_day else None
-            first_for_day = False
-            for source_in, source_out in _segment_ranges(
-                clip.duration_seconds,
-                max_segment_seconds,
-                style.min_segment_seconds,
-                beats,
-                style.beat_snap_window_seconds,
-            ):
-                segments.append(
-                    TimelineSegment(
-                        clip=clip,
-                        source_in=source_in,
-                        source_out=source_out,
-                        record_in=record_cursor,
-                        record_out=record_cursor + (source_out - source_in),
-                        day=day,
-                        role="main",
-                        marker=marker,
-                    )
+            duration = source_out - source_in
+            segments.append(
+                TimelineSegment(
+                    clip=clip,
+                    source_in=source_in,
+                    source_out=source_out,
+                    record_in=record_cursor,
+                    record_out=record_cursor + duration,
+                    day=day,
+                    role="main",
+                    marker=f"Jour {day.isoformat()}" if first_for_day else None,
                 )
-                marker = None
-                record_cursor += source_out - source_in
-
-            processed += 1
-            _progress(
-                progress,
-                0.50 + 0.30 * processed / total_main,
-                f"Timeline: {processed}/{total_main} clips principaux",
             )
+            first_for_day = False
+            previous_clip_path = clip.path
+            record_cursor += duration
 
-    if style.beat_sync_enabled and not any(beat_cache.values()):
-        warnings.append("Aucun beat detecte: cuts places sur la duree maximale des segments")
+    if target_duration_seconds is not None and record_cursor < target_duration_seconds - 1.0:
+        warnings.append(
+            f"Duree cible de {target_duration_seconds:.1f}s non atteinte: "
+            f"{record_cursor:.1f}s de rushs exploitables"
+        )
 
     return TimelinePlan(
         name=f"Auto Resolve {datetime.now().strftime('%Y-%m-%d %H:%M')}",
@@ -177,7 +216,128 @@ def build_timeline_plan(
         source_dir=source_dir,
         style_path=style_path,
         output_dir=output_dir,
+        target_duration_seconds=target_duration_seconds,
     )
+
+
+def _select_for_target(
+    candidates_by_day: Dict[object, List[tuple[ClipInfo, float, float]]],
+    target_duration_seconds: float,
+    max_segment_seconds: float,
+    min_segment_seconds: float,
+    drone_clips: List[ClipInfo],
+    transition_seconds: float,
+) -> Dict[object, List[tuple[ClipInfo, float, float]]]:
+    days = [day for day in sorted(candidates_by_day) if candidates_by_day[day]]
+    transition_budget = 0.0
+    if drone_clips and len(days) > 1:
+        for index in range(len(days) - 1):
+            drone_clip = drone_clips[index % len(drone_clips)]
+            transition_budget += min(transition_seconds, drone_clip.duration_seconds)
+
+    main_budget = max(0.0, target_duration_seconds - transition_budget)
+    capacities = {
+        day: sum(source_out - source_in for _, source_in, source_out in candidates_by_day[day])
+        for day in days
+    }
+    day_budgets = _balanced_budgets(capacities, main_budget)
+    return {
+        day: _select_evenly_spaced_ranges(
+            candidates_by_day[day],
+            day_budgets.get(day, 0.0),
+            max_segment_seconds,
+            min_segment_seconds,
+        )
+        for day in days
+    }
+
+
+def _balanced_budgets(capacities: Dict[object, float], total_budget: float) -> Dict[object, float]:
+    budgets = {key: 0.0 for key in capacities}
+    remaining = min(max(0.0, total_budget), sum(capacities.values()))
+    active = list(capacities)
+
+    while active and remaining > 0.001:
+        share = remaining / len(active)
+        saturated = [key for key in active if capacities[key] - budgets[key] <= share + 0.001]
+        if not saturated:
+            for key in active:
+                budgets[key] += share
+            break
+        for key in saturated:
+            available = capacities[key] - budgets[key]
+            budgets[key] += available
+            remaining -= available
+            active.remove(key)
+
+    return budgets
+
+
+def _select_evenly_spaced_ranges(
+    candidates: List[tuple[ClipInfo, float, float]],
+    budget: float,
+    max_segment_seconds: float,
+    min_segment_seconds: float,
+) -> List[tuple[ClipInfo, float, float]]:
+    if not candidates or budget <= 0:
+        return []
+
+    total_duration = sum(source_out - source_in for _, source_in, source_out in candidates)
+    if budget >= total_duration - 0.001:
+        return candidates
+
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate[2] - candidate[1] >= min_segment_seconds
+    ]
+    if not eligible or sum(source_out - source_in for _, source_in, source_out in eligible) < budget:
+        eligible = candidates
+
+    count = min(len(eligible), max(1, ceil(budget / max_segment_seconds)))
+    while count < len(eligible):
+        selected = [eligible[index] for index in _evenly_spaced_indices(len(eligible), count)]
+        if sum(source_out - source_in for _, source_in, source_out in selected) >= budget:
+            break
+        count += 1
+
+    selected = [eligible[index] for index in _evenly_spaced_indices(len(eligible), count)]
+    allocations = _equal_allocations(
+        [source_out - source_in for _, source_in, source_out in selected],
+        min(budget, sum(source_out - source_in for _, source_in, source_out in selected)),
+    )
+
+    fitted: List[tuple[ClipInfo, float, float]] = []
+    for (clip, source_in, source_out), duration in zip(selected, allocations):
+        available = source_out - source_in
+        trim = max(0.0, (available - duration) / 2.0)
+        fitted_in = source_in + trim
+        fitted.append((clip, fitted_in, fitted_in + duration))
+    return fitted
+
+
+def _evenly_spaced_indices(length: int, count: int) -> List[int]:
+    return [min(length - 1, int((index + 0.5) * length / count)) for index in range(count)]
+
+
+def _equal_allocations(capacities: List[float], total: float) -> List[float]:
+    allocations = [0.0] * len(capacities)
+    remaining = total
+    active = list(range(len(capacities)))
+
+    while active and remaining > 0.001:
+        share = remaining / len(active)
+        saturated = [index for index in active if capacities[index] <= share + 0.001]
+        if not saturated:
+            for index in active:
+                allocations[index] = share
+            break
+        for index in saturated:
+            allocations[index] = capacities[index]
+            remaining -= capacities[index]
+            active.remove(index)
+
+    return allocations
 
 
 def _segment_ranges(

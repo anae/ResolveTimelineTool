@@ -16,8 +16,8 @@ class TimelineApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Resolve Timeline Tool")
-        self.geometry("720x430")
-        self.minsize(640, 390)
+        self.geometry("720x470")
+        self.minsize(640, 430)
 
         self._queue: "queue.Queue[Tuple[str, Any]]" = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -25,6 +25,7 @@ class TimelineApp(tk.Tk):
         self.source_var = tk.StringVar()
         self.style_var = tk.StringVar()
         self.output_var = tk.StringVar()
+        self.target_duration_var = tk.DoubleVar(value=5.0)
         self.max_segment_var = tk.DoubleVar(value=6.0)
         self.status_var = tk.StringVar(value="Pret")
         self.progress_var = tk.DoubleVar(value=0.0)
@@ -65,8 +66,21 @@ class TimelineApp(tk.Tk):
         ).pack(side=tk.LEFT)
         ttk.Label(segment_frame, text="secondes").pack(side=tk.LEFT, padx=(8, 0))
 
+        ttk.Label(root, text="Duree cible timeline").grid(row=4, column=0, sticky="w", pady=4)
+        target_frame = ttk.Frame(root)
+        target_frame.grid(row=4, column=1, sticky="w", padx=8)
+        ttk.Spinbox(
+            target_frame,
+            from_=0.5,
+            to=180.0,
+            increment=0.5,
+            textvariable=self.target_duration_var,
+            width=8,
+        ).pack(side=tk.LEFT)
+        ttk.Label(target_frame, text="minutes").pack(side=tk.LEFT, padx=(8, 0))
+
         action_frame = ttk.Frame(root)
-        action_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(18, 10))
+        action_frame.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(18, 10))
         action_frame.columnconfigure(0, weight=1)
         action_frame.columnconfigure(1, weight=1)
         self.generate_button = ttk.Button(action_frame, text="Generer timeline", command=self._start_processing)
@@ -75,13 +89,13 @@ class TimelineApp(tk.Tk):
         self.rerun_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         ttk.Progressbar(root, variable=self.progress_var, maximum=100).grid(
-            row=5, column=0, columnspan=3, sticky="ew", pady=(4, 2)
+            row=6, column=0, columnspan=3, sticky="ew", pady=(4, 2)
         )
-        ttk.Label(root, textvariable=self.status_var).grid(row=6, column=0, columnspan=3, sticky="w")
+        ttk.Label(root, textvariable=self.status_var).grid(row=7, column=0, columnspan=3, sticky="w")
 
         self.log = tk.Text(root, height=10, wrap="word")
-        self.log.grid(row=7, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
-        root.rowconfigure(7, weight=1)
+        self.log.grid(row=8, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
+        root.rowconfigure(8, weight=1)
         self.log.insert("end", "Les exports EDL et FCPXML seront crees dans le dossier de sortie.\n")
         self.log.configure(state="disabled")
 
@@ -127,8 +141,12 @@ class TimelineApp(tk.Tk):
             style_path = Path(self.style_var.get().strip())
             output_dir = Path(self.output_var.get().strip()) if self.output_var.get().strip() else None
             max_segment = float(self.max_segment_var.get())
+            target_duration = float(self.target_duration_var.get()) * 60.0
         except ValueError:
-            messagebox.showerror("Parametre invalide", "La duree maximale doit etre un nombre.")
+            messagebox.showerror("Parametre invalide", "Les durees doivent etre des nombres.")
+            return
+        if max_segment <= 0 or target_duration <= 0:
+            messagebox.showerror("Parametre invalide", "Les durees doivent etre superieures a zero.")
             return
 
         if not source_dir.is_dir():
@@ -142,7 +160,7 @@ class TimelineApp(tk.Tk):
         self._append_log("Traitement lance. Le style Markdown est relu depuis disque.\n")
         self._worker = threading.Thread(
             target=self._run_worker,
-            args=(source_dir, style_path, output_dir, max_segment),
+            args=(source_dir, style_path, output_dir, max_segment, target_duration),
             daemon=True,
         )
         self._worker.start()
@@ -153,12 +171,14 @@ class TimelineApp(tk.Tk):
         style_path: Path,
         output_dir: Path | None,
         max_segment: float,
+        target_duration: float,
     ) -> None:
         try:
             result = process_timeline(
                 source_dir=source_dir,
                 style_path=style_path,
                 max_segment_seconds=max_segment,
+                target_duration_seconds=target_duration,
                 output_dir=output_dir,
                 progress=lambda fraction, message: self._queue.put(("progress", (fraction, message))),
             )
