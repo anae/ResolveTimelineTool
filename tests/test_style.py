@@ -16,6 +16,7 @@ class StyleTests(unittest.TestCase):
                 transition drone: 4s
                 minimum segment: 1.5s
                 fenetre beat: 0.2s
+                ignorer: proxy, cache
                 """,
                 encoding="utf-8",
             )
@@ -29,6 +30,8 @@ class StyleTests(unittest.TestCase):
         self.assertEqual(style.min_segment_seconds, 1.5)
         self.assertEqual(style.beat_snap_window_seconds, 0.2)
         self.assertNotIn("4s", style.drone_keywords)
+        self.assertEqual(style.skip_keywords, ("cache", "proxy"))
+        self.assertNotIn("dji", style.skip_keywords)
 
 
 if __name__ == "__main__":

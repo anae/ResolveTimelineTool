@@ -26,6 +26,8 @@ def read_style(path: Path) -> StyleConfig:
     lowered = text.lower()
 
     drone_keywords = _extract_keywords(lowered, ("drone", "dji", "aerien", "aérien"))
+    if any(anchor in lowered for anchor in ("drone", "dji", "mavic", "fpv")):
+        drone_keywords = tuple(sorted(set(drone_keywords).union(_DEFAULT_DRONE_KEYWORDS)))
     skip_keywords = _extract_keywords(lowered, ("skip", "ignorer", "exclure"))
 
     transition_seconds = _extract_duration(
@@ -110,9 +112,6 @@ def _extract_keywords(text: str, anchors: Iterable[str]) -> Tuple[str, ...]:
                 cleaned = _clean_keyword(item)
                 if cleaned:
                     keywords.add(cleaned)
-
-    if any(anchor in text for anchor in ("drone", "dji", "mavic", "fpv")):
-        keywords.update(_DEFAULT_DRONE_KEYWORDS)
 
     return tuple(sorted(keywords))
 
