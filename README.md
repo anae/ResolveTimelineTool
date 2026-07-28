@@ -19,7 +19,9 @@ cd /Users/serverm4/VipeCoding/ResolveTimelineTool
 python3 run.py
 ```
 
-Sur macOS, si le Python systeme refuse de charger Tkinter, utiliser le Python Homebrew avec Tk :
+Sur macOS, le lanceur detecte automatiquement le Python systeme incompatible
+avec Tkinter et redemarre l'application avec le Python Homebrew installe.
+La commande explicite reste disponible :
 
 ```bash
 /opt/homebrew/bin/python3.12 run.py
