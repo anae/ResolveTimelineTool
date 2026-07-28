@@ -81,19 +81,28 @@ def export_fcpxml(plan: TimelinePlan, output_path: Path) -> None:
         longest_duration = max(
             segment.clip.duration_seconds for segment in plan.segments if segment.clip.path == path
         )
-        ET.SubElement(
+        asset = ET.SubElement(
             resources,
             "asset",
             {
                 "id": asset_id,
                 "name": path.name,
-                "src": path.resolve().as_uri(),
+                "format": "r0",
                 "start": "0s",
                 "duration": fcpx_time(longest_duration, plan.fps),
                 "hasVideo": "1",
                 "hasAudio": "1",
                 "audioSources": "1",
                 "audioChannels": "2",
+                "audioRate": "48000",
+            },
+        )
+        ET.SubElement(
+            asset,
+            "media-rep",
+            {
+                "kind": "original-media",
+                "src": path.resolve().as_uri(),
             },
         )
 
