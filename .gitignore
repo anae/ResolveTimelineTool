@@ -12,6 +12,22 @@ htmlcov/
 .venv/
 venv/
 env/
+.env
+.env.*
+
+.idea/
+.vscode/
 
 _resolve_timeline_exports/
 *.log
+
+# Les rushes et exports vidéo ne doivent pas entrer dans le dépôt.
+*.mov
+*.mp4
+*.mxf
+*.avi
+*.mkv
+*.webm
+*.wav
+*.aiff
+*.mp3

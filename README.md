@@ -1,61 +1,70 @@
 # Resolve Timeline Tool
 
-Petit outil local pour preparer une timeline EDL/FCPXML importable dans DaVinci Resolve.
+Prépare automatiquement un premier montage à partir de rushes vidéo et génère une timeline prête à être affinée dans DaVinci Resolve.
 
-Situation:
-Vous rentrez de voyage avec des heures de rush vidéo (action camera, drone etc).
-Il faut maintenant faire les cuts et préparer une vidéos qui met en avant les meilleurs moment du trip.
-La motivation n'est pas à son comble devant les heures de travail que celà représente.
-Resolve Timeline Tool vient résoudre le problème en préparant une timeline déjà pré-découpée et prête pour votre final touch.
+L’application analyse un dossier de médias, applique une direction de montage décrite en Markdown, sélectionne des extraits répartis dans le temps et exporte le résultat aux formats EDL et FCPXML.
 
-## Apercu
+![Interface de Resolve Timeline Tool](docs/resolve-timeline-tool.png)
 
-![Apercu de l'interface Resolve Timeline Tool](docs/resolve-timeline-tool.png)
+## Fonctionnalités
 
-## Lancer
+- analyse des rushes avec récupération des durées et timecodes intégrés ;
+- sélection chronologique d’extraits selon une durée cible ;
+- durée maximale configurable pour chaque plan ;
+- règles de montage exprimées dans un simple fichier Markdown ;
+- placement optionnel des coupes à proximité des beats audio ;
+- export `.edl` et `.fcpxml` compatible avec DaVinci Resolve ;
+- rapport Markdown détaillant la sélection et les éventuels avertissements.
+
+## Démarrage
+
+Prérequis : Python 3.12 avec Tkinter. FFmpeg est recommandé pour lire précisément les métadonnées vidéo et analyser l’audio.
 
 ```bash
-cd /Users/serverm4/VipeCoding/ResolveTimelineTool
+git clone https://github.com/anae/ResolveTimelineTool.git
+cd ResolveTimelineTool
 python3 run.py
 ```
 
-Sur macOS, le lanceur detecte automatiquement le Python systeme incompatible
-avec Tkinter et redemarre l'application avec le Python Homebrew installe.
-La commande explicite reste disponible :
-
-```bash
-/opt/homebrew/bin/python3.12 run.py
-```
+Sur macOS, le lanceur détecte automatiquement une installation Homebrew de Python 3.12 lorsque le Python système ne permet pas de charger Tkinter.
 
 ## Utilisation
 
-1. Choisir le dossier source contenant les rushs.
-2. Choisir le fichier `.md` qui decrit le style.
-3. Regler la duree maximale d'un segment.
-4. Regler la duree cible de la timeline en minutes.
-5. Cliquer sur `Generer timeline`.
-6. Modifier le `.md` si besoin, puis cliquer sur `Relancer apres modification .md`.
+1. Sélectionner le dossier contenant les rushes.
+2. Choisir le fichier `.md` qui décrit le style de montage.
+3. Définir la durée maximale d’un segment.
+4. Définir la durée cible de la timeline.
+5. Générer la timeline.
+6. Importer le fichier EDL ou FCPXML obtenu dans DaVinci Resolve.
 
-La duree maximale limite chaque plan, mais ne fixe pas la longueur du montage.
-La duree cible selectionne des extraits chronologiques repartis entre les
-journees pour produire une timeline de la longueur demandee.
+Les exports sont enregistrés dans `_resolve_timeline_exports` ou dans le dossier de sortie choisi :
 
-Le traitement cree trois fichiers dans `_resolve_timeline_exports` ou le dossier choisi :
+- `.edl` pour un échange EDL simple ;
+- `.fcpxml` pour conserver davantage de métadonnées dans Resolve ;
+- `_report.md` pour consulter le découpage, les rôles et les avertissements.
 
-- `.edl` pour un import EDL simple.
-- `.fcpxml` pour un import XML/FCPXML dans Resolve.
-- `_report.md` avec le decoupage par jour, les roles et les avertissements.
+## Décrire le style de montage
 
-## Notes sur le fichier style
-
-Le style peut rester en langage naturel. Le parser reconnait aussi quelques lignes pratiques :
+Le fichier de style peut être rédigé en langage naturel. Quelques paramètres structurés peuvent également être utilisés :
 
 ```md
 fps: 25
-mots-cles drone: drone, DJI, Mavic, aerial
+mots-clés drone: drone, DJI, Mavic, aerial
 transition drone: 3s
 minimum segment: 2s
-fenetre beat: 0.35s
+fenêtre beat: 0.35s
 ```
 
-Pour des durees exactes et la synchronisation approximative sur les beats, installer FFmpeg (`ffprobe` et `ffmpeg`) dans le `PATH`. Sans FFmpeg, l'outil reste utilisable mais il applique une duree par defaut aux clips dont la duree ne peut pas etre lue.
+Un exemple complet est disponible dans [`STYLE_TEST_RANDO_ALPINISME.md`](STYLE_TEST_RANDO_ALPINISME.md).
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## Stack
+
+Python, Tkinter, FFmpeg/FFprobe, EDL et FCPXML.
+
+Projet conçu par [Elliot Ananaba](https://ananaba.be).
